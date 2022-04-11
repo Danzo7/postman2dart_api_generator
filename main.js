@@ -130,25 +130,22 @@ const requestToFunction = async (currentRequest, desc = "") => {
   if (response.statusCode == 200) {
     //Last return =>${provideKnown(value, key)}
     String str = await response.stream.bytesToString();
-
+    ${
+      type.includes("List") ? "List<dynamic>?" : "dynamic"
+    } targetObj = jsonDecode(str)${key != "default" ? '["' + key + '"]' : ""};
 ` +
     (typeof value == "object" && typeof1(value) != "dynamic"
       ? `
-    ${
-      type.includes("List") ? "List<dynamic>?" : "dynamic"
-    } targetObj = jsonDecode(str)["${key}"];
-      return (${
-        type.includes("List")
-          ? type.includes("dynamic")
-            ? "targetObj"
-            : "targetObj?.map((e) => " +
-              cap.pascalCase(key) +
-              ".fromJson(e)).toList()"
-          : cap.pascalCase(key) + ".fromJson(targetObj)"
-      });`
-      : typeof value == "number"
-      ? "return int.parse(str);"
-      : "return str;") +
+    return (${
+      type.includes("List")
+        ? type.includes("dynamic")
+          ? "targetObj"
+          : "targetObj?.map((e) => " +
+            cap.pascalCase(key) +
+            ".fromJson(e)).toList()"
+        : cap.pascalCase(key) + ".fromJson(targetObj)"
+    });`
+      : "return targetObj;") +
     `
   } else {
     print(jsonDecode(response.reasonPhrase ?? ""));
