@@ -64,24 +64,21 @@ const jsonToDart = (cName, object, isList = false) => {
     fJson += `///known value \`${provideKnown(value, key)}\`
     ${cap.camelCase(key)} = ${
       typeof1(value) == "list"
-        ? type.slice(0, -1) +
-          ".from(json['" +
+        ? "json['" +
           key +
-          "']?.map((e) => " +
+          "']?.map((e)=>" +
           cap.pascalCase(key) +
-          ".fromJson(e)))"
+          ".fromJson(e)).toList().cast<" +
+          cap.pascalCase(key) +
+          ">()"
         : typeof1(value) == "object"
         ? cap.pascalCase(key) + ".fromJson(json['" + key + "'])"
         : "json['" + key + "']"
     };
     `;
-    tJson += `data['${key}'] = ${
-      typeof1(value) == "String?" ||
-      typeof1(value) == "num?" ||
-      typeof1(value) == "bool?"
-        ? cap.camelCase(key)
-        : "jsonEncode(" + cap.camelCase(key) + ")"
-    };
+    tJson += `if(${cap.camelCase(key)}!=null)(data['${key}'] = ${cap.camelCase(
+      key
+    )});
     `;
   }
 
@@ -224,8 +221,6 @@ function initTestFile() {
   fs.writeFileSync(
     path.join(dir, "test_api.dart"),
     `import 'api.dart';
-  
-    class Test{
       void main() async {
       `,
     {
@@ -293,23 +288,25 @@ function provideKnown(value, type) {
 
 function generateTestFile(obj) {
   initTestFile();
+  let count = 0;
   for (const { request } of obj.item) {
+    count++;
     const params = Object.values(JSON.parse(request.body.raw))[0];
     const entryPoint = cap.camelCase(request.url.path[1]);
     writeToDart(
       "test_api",
-      `print("----------${entryPoint}-------------");
+      `print("----------${entryPoint}----------");
       print(await  Api.${generateTestCalls(
         params,
         cap.camelCase(entryPoint)
       )});    
-      print("------------------------------");
+      print("---------Done:${count}/${obj.item.length}---------");
       print("cooldown for 250ms");
       await Future.delayed(Duration(milliseconds: 250));
       `
     );
   }
-  writeToDart("test_api", "}}");
+  writeToDart("test_api", "}");
 }
 function generateTestCalls(params, entryPoint) {
   const entries = Object.entries(params);
