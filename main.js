@@ -7,7 +7,6 @@ import { readFile } from "fs/promises";
 
 const dir = path.join(path.resolve(), "api");
 let classes = new Map();
-const functionNames = [];
 const duplicatedFunctions = new Map();
 let totalClasses = 0;
 const obj = JSON.parse(await readFile(new URL("test.json", import.meta.url)));
@@ -16,7 +15,7 @@ const generateApi = async (obj) => {
   InitDartApiFile();
   let counter = 1;
   //const items = obj.item.slice(0, 8);
-  for (const { request, name } of obj.item.slice(47, 48)) {
+  for (const { request, name } of obj.item) {
     console.log(`${counter}/${obj.item.length}`);
     await requestToFunction(request, name);
     counter++;
@@ -63,7 +62,7 @@ const jsonToDart = (cName, object, isList = false) => {
     cBody += ` this.${cap.camelCase(key)}, `;
     fJson += `///known value \`${provideKnown(value, key)}\`
     ${cap.camelCase(key)} = ${
-      typeof1(value) == "List"
+      typeof1(value) == "list"
         ? type.slice(0, -1) +
           ".from(json['" +
           key +
@@ -75,7 +74,13 @@ const jsonToDart = (cName, object, isList = false) => {
         : "json['" + key + "']"
     };
     `;
-    tJson += `data['${key}'] = ${cap.camelCase(key)};
+    tJson += `data['${key}'] = ${
+      typeof1(value) == "String?" ||
+      typeof1(value) == "num?" ||
+      typeof1(value) == "bool?"
+        ? cap.camelCase(key)
+        : "jsonEncode(" + cap.camelCase(key) + ")"
+    };
     `;
   }
 
