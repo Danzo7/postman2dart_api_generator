@@ -7,6 +7,7 @@ import { readFile } from "fs/promises";
 
 const dir = path.join(path.resolve(), "api");
 let classes = new Map();
+let classesPropsCount = new Map();
 const duplicatedFunctions = new Map();
 let totalClasses = 0;
 const obj = JSON.parse(await readFile(new URL("test.json", import.meta.url)));
@@ -99,13 +100,16 @@ const jsonToDart = (cName, object, isList = false) => {
       return data;
     }
   }`;
+  const props = Object.keys(isList ? object[0] : object);
   if (classes.has(cName)) {
     console.log(cName + " is duplicated, Choosing the richest one.");
-    classes.set(
-      cName,
-      klass.length > classes.get(cName).length ? klass : classes.get(cName)
-    );
-  } else classes.set(cName, klass);
+    if (props.length > classesPropsCount.get(cName)) classes.set(cName, klass);
+    if (props.length > classesPropsCount.get(cName))
+      classesPropsCount.set(cName, props);
+  } else {
+    classes.set(cName, klass);
+    classesPropsCount.set(cName, props.length);
+  }
 };
 
 const requestToFunction = async (currentRequest, desc = "") => {
