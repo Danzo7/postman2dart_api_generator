@@ -63,7 +63,7 @@ const jsonToDart = (cName, object, isList = false) => {
     cBody += ` this.${cap.camelCase(key)}, `;
     fJson += `///known value \`${provideKnown(value, key)}\`
     ${cap.camelCase(key)} = ${
-      typeof1(value) == "list"
+      typeof1(value) == "list" && value.length != 0
         ? "json['" +
           key +
           "']?.map((e)=>" +
