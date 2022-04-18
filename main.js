@@ -10,10 +10,8 @@ let classes = new Map();
 let classesPropsCount = new Map();
 const duplicatedFunctions = new Map();
 let totalClasses = 0;
-const obj = JSON.parse(await readFile(new URL("test.json", import.meta.url)));
-
-const generateApi = async (obj) => {
-  InitDartApiFile();
+const generateApi = async (obj, name) => {
+  InitDartApiFile(name);
   let counter = 1;
   //const items = obj.item.slice(0, 8);
   for (const { request, name } of obj.item) {
@@ -23,9 +21,9 @@ const generateApi = async (obj) => {
     console.log("take break for 150ms...");
     await new Promise((resolve) => setTimeout(resolve, 250)); // 3 sec
   }
-  writeClasses(duplicatedFunctions);
-  closeClass();
-  writeClasses(classes);
+  writeClasses(name, duplicatedFunctions);
+  closeClass(name);
+  writeClasses(name, classes);
   console.log(
     ` generate  ${duplicatedFunctions.size}  / ${obj.item.length} Api Function. 
       ${obj.item.length - duplicatedFunctions.size} are duplicated.`
@@ -58,11 +56,11 @@ const jsonToDart = (cName, object, isList = false) => {
   let tJson = "";
   for (const [key, value] of Object.entries(isList ? object[0] : object)) {
     let type = processTyping(key, value);
-    headers += `${type} ${cap.camelCase(key)};
+    headers += `///known value \`${provideKnown(value, key)}\`
+    ${type} ${cap.camelCase(key)};
     `;
     cBody += ` this.${cap.camelCase(key)}, `;
-    fJson += `///known value \`${provideKnown(value, key)}\`
-    ${cap.camelCase(key)} = ${
+    fJson += `${cap.camelCase(key)} = ${
       typeof1(value) == "list" && value.length != 0
         ? "json['" +
           key +
@@ -92,7 +90,7 @@ const jsonToDart = (cName, object, isList = false) => {
     }
   
     Map<String, dynamic> toJson() {
-      final Map<String, dynamic> data = new Map<String, dynamic>();
+      final Map<String, dynamic> data = <String, dynamic>{};
       ${tJson}
       return data;
     }
@@ -110,8 +108,10 @@ const jsonToDart = (cName, object, isList = false) => {
 };
 
 const requestToFunction = async (currentRequest, desc = "") => {
-  const params = Object.values(JSON.parse(currentRequest.body.raw))[0];
-  const entryPoint = Object.keys(JSON.parse(currentRequest.body.raw))[0];
+  const requests = JSON.parse(currentRequest.body.raw);
+  const entryPoint =
+    Object.keys(requests).length == 1 ? Object.keys(requests)[0] : undefined;
+  const params = entryPoint ? Object.values(requests)[0] : requests;
   const entries = Object.entries(params);
   let fParams = ``;
   let fBody = ``;
@@ -126,19 +126,27 @@ const requestToFunction = async (currentRequest, desc = "") => {
   }
 
   const res = await requestSender(currentRequest);
-  const [key, value] = Object.entries(res)[0];
-  let type = processTyping(key, value);
-  console.log(type);
+  let type = typeof1(res);
+  let key =
+    currentRequest.url.path[currentRequest.url.path.length - 1] + "Respond";
+  let value = res;
+  if (type == "object") {
+    [key, value] = Object.entries(res)[0];
+  }
+  type = processTyping(key, value);
+
   const func =
     `/// #### ${desc} .
-  static Future<${type}> ${cap.camelCase(currentRequest.url.path[1])}(
+  static Future<${type}> ${cap.camelCase(
+      currentRequest.url.path[currentRequest.url.path.length - 1]
+    )}(
     {${fParams.slice(0, -1)}}) async {
         var headers = {'Content-Type': 'application/json'};
         var request = http.Request(
               '${currentRequest?.method ?? "POST"}',
               Uri.parse('${currentRequest.url.raw}'));
           request.body = json.encode({
-            "${entryPoint}": {
+            ${entryPoint ? '"' + entryPoint + '":' : ""} {
       ${fBody.slice(0, -1)}
     }
   });
@@ -167,12 +175,13 @@ const requestToFunction = async (currentRequest, desc = "") => {
       : "return targetObj;") +
     `
   } else {
-    print(jsonDecode(response.reasonPhrase ?? ""));
-    return null;
+    throw Exception(response.reasonPhrase);
   }
 }
 `;
-  const fName = cap.camelCase(currentRequest.url.path[1]);
+  const fName = cap.camelCase(
+    currentRequest.url.path[currentRequest.url.path.length - 1]
+  );
 
   if (duplicatedFunctions.has(fName)) {
     console.log(fName + " is duplicated, Choosing the richest one.");
@@ -214,13 +223,13 @@ const requestSender = async (currentRequest) => {
     return await res.json();
   }
 };
-function initTestFile() {
+function initTestFile(name) {
   fs.mkdirSync(dir, {
     recursive: true,
   });
   fs.writeFileSync(
-    path.join(dir, "test_api.dart"),
-    `import 'api.dart';
+    path.join(dir, name + "_test.dart"),
+    `import '${name}.dart';
       void main() async {
       `,
     {
@@ -228,16 +237,16 @@ function initTestFile() {
     }
   );
 }
-function InitDartApiFile() {
+function InitDartApiFile(name) {
   fs.mkdirSync(dir, {
     recursive: true,
   });
   fs.writeFileSync(
-    path.join(dir, "api.dart"),
+    path.join(dir, name + ".dart"),
     `import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-    class Api{
+    class ${cap.pascalCase(name)}{
 
       `,
     {
@@ -245,12 +254,12 @@ import 'dart:convert';
     }
   );
 }
-function closeClass() {
-  writeToDart("api", "}");
+function closeClass(name) {
+  writeToDart(name, "}");
 }
-function writeClasses(classes) {
+function writeClasses(name, classes) {
   for (const klass of classes.values()) {
-    writeToDart("api", `${klass}`);
+    writeToDart(name, `${klass}`);
   }
 }
 
@@ -286,18 +295,21 @@ function provideKnown(value, type) {
     : type;
 }
 
-function generateTestFile(obj) {
-  initTestFile();
+function generateTestFile(obj, name) {
+  initTestFile(name);
   let count = 0;
   for (const { request } of obj.item) {
     count++;
-    const params = Object.values(JSON.parse(request.body.raw))[0];
-    const entryPoint = cap.camelCase(request.url.path[1]);
+
+    const params = Object.values(JSON.parse(request.body.raw));
+    const entryPoint = cap.camelCase(
+      request.url.path[request.url.path.length - 1]
+    );
     writeToDart(
-      "test_api",
+      name + "_test",
       `print("----------${entryPoint}----------");
-      print(await  Api.${generateTestCalls(
-        params,
+      print(await  ${cap.pascalCase(name)}.${generateTestCalls(
+        params.length == 1 ? params[0] : JSON.parse(request.body.raw),
         cap.camelCase(entryPoint)
       )});    
       print("---------Done:${count}/${obj.item.length}---------");
@@ -306,11 +318,11 @@ function generateTestFile(obj) {
       `
     );
   }
-  writeToDart("test_api", "}");
+  writeToDart(name + "_test", "}");
 }
 function generateTestCalls(params, entryPoint) {
   const entries = Object.entries(params);
-
+  console.log(params);
   let fParams = ``;
   for (const [key, value] of entries) {
     let treated = "";
@@ -338,6 +350,11 @@ function generateTestCalls(params, entryPoint) {
   }
   return `${entryPoint}(${fParams.slice(0, -1)})`;
 }
-
-generateApi(obj);
-//generateTestFile(obj);
+const generate = async (name) => {
+  const obj = JSON.parse(
+    await readFile(new URL(name + ".json", import.meta.url))
+  );
+  await generateApi(obj, name);
+  generateTestFile(obj, name);
+};
+generate("test");
