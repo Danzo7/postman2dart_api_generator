@@ -128,7 +128,7 @@ const requestToFunction = async (currentRequest, desc = "") => {
   const res = await requestSender(currentRequest);
   let type = typeof1(res);
   let key =
-    currentRequest.url.path[currentRequest.url.path.length - 1] + "Respond";
+    currentRequest.url.path[currentRequest.url.path.length - 1] + "UnknownName";
   let value = res;
   if (type == "object") {
     [key, value] = Object.entries(res)[0];
@@ -146,9 +146,9 @@ const requestToFunction = async (currentRequest, desc = "") => {
               '${currentRequest?.method ?? "POST"}',
               Uri.parse('${currentRequest.url.raw}'));
           request.body = json.encode({
-            ${entryPoint ? '"' + entryPoint + '":' : ""} {
+            ${entryPoint ? '"' + entryPoint + '":{' : ""} 
       ${fBody.slice(0, -1)}
-    }
+      ${entryPoint ? "}" : ""}
   });
   request.headers.addAll(headers);
 
@@ -158,8 +158,19 @@ const requestToFunction = async (currentRequest, desc = "") => {
     //Last return =>${provideKnown(value, key)}
     String str = await response.stream.bytesToString();
     ${
-      type.includes("List") ? "List<dynamic>?" : "dynamic"
-    } targetObj = jsonDecode(str)${key != "default" ? '["' + key + '"]' : ""};
+      typeof1(value) == "list"
+        ? "List<dynamic>?"
+        : typeof1(value) == "object"
+        ? "dynamic"
+        : typeof1(value)
+    } targetObj = ${
+      typeof1(value) == "String?" && key == "default"
+        ? "str"
+        : "jsonDecode(str)" +
+          (key != "default" && !key.includes("UnknownName")
+            ? '["' + key + '"]'
+            : "")
+    };
 ` +
     (typeof value == "object" && typeof1(value) != "dynamic"
       ? `
@@ -357,4 +368,4 @@ const generate = async (name) => {
   await generateApi(obj, name);
   generateTestFile(obj, name);
 };
-generate("test");
+generate("auth_api");
